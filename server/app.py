@@ -12,10 +12,12 @@ CORS(app)
 # Global variables for data
 specialists_df = None
 topic_keywords = None
+# Precomputed normalized keywords for fast medical query detection
+normalized_keyword_set = set()
 
 def load_data():
     """Load specialist data and topic keywords on startup"""
-    global specialists_df, topic_keywords
+    global specialists_df, topic_keywords, normalized_keyword_set
     
     try:
         # Try to load parquet file from data folder
@@ -52,12 +54,42 @@ def load_data():
             print("Warning: No topic keywords found. Search will be slower.")
             topic_keywords = {}
         
+        # Precompute a normalized keyword set for simple medical query checks
+        normalized_keyword_set = set()
+        try:
+            for _, keywords in topic_keywords.items():
+                for kw in keywords:
+                    nk = normalize_text(kw)
+                    if nk:
+                        # Add the full phrase and also individual words
+                        normalized_keyword_set.add(nk)
+                        for w in nk.split():
+                            if len(w) > 2:
+                                normalized_keyword_set.add(w)
+        except Exception as e:
+            print(f"Warning: failed to precompute normalized keywords: {e}")
+        
         print(f"Successfully loaded {len(specialists_df)} specialists")
         print(f"Found {len(topic_keywords)} topic clusters")
         return True
     except Exception as e:
         print(f"Error loading data: {e}")
         return False
+
+def is_medical_query(query: str) -> bool:
+    """Heuristic: determine if the query appears medical by checking against known keywords."""
+    if not query:
+        return False
+    qn = normalize_text(query)
+    if not qn:
+        return False
+    # If any word or the whole query overlaps with our known medical keywords, accept.
+    if qn in normalized_keyword_set:
+        return True
+    for w in qn.split():
+        if len(w) > 2 and w in normalized_keyword_set:
+            return True
+    return False
 
 def normalize_text(text: str) -> str:
     """Normalize text for consistent matching
@@ -152,11 +184,8 @@ def filter_specialists(query: str, location: str = None, max_results: int = 20) 
     # Sort by score, then by relevancy score
     results = filtered_df[filtered_df['search_score'] > 0].copy()
     if len(results) == 0:
-        # Fallback - return top specialists from filtered set
-        if 'relevancy_score' in filtered_df.columns:
-            results = filtered_df.nlargest(max_results, 'relevancy_score')
-        else:
-            results = filtered_df.head(max_results)
+        # No matches: return empty to avoid misleading results for non-medical queries
+        return []
     else:
         sort_columns = ['search_score']
         if 'relevancy_score' in results.columns:
@@ -223,24 +252,45 @@ def search_specialists():
         
         if specialists_df is None:
             return jsonify({
-                'success': False,
                 'error': 'Specialist data not loaded',
                 'results': []
             }), 500
         
+        # Reject clearly non-medical queries early
+        invalid_query = not is_medical_query(query)
+        if invalid_query:
+            return jsonify({
+                'success': True,
+                'query': query,
+                'location': location or None,
+                'invalid_query': True,
+                'message': 'Your search does not appear to be a medical condition or specialty.',
+                'total_results': 0,
+                'results': []
+            })
+
         # Perform search
         results = filter_specialists(query, location, max_results)
-        
+        if not results:
+            return jsonify({
+                'success': True,
+                'query': query,
+                'location': location or None,
+                'invalid_query': False,
+                'total_results': 0,
+                'results': []
+            })
+
         return jsonify({
             'success': True,
             'query': query,
             'location': location or None,
+            'invalid_query': False,
             'total_results': len(results),
             'results': results
         })
         
     except Exception as e:
-        print(f"Error in search_specialists: {e}")
         return jsonify({
             'success': False,
             'error': str(e),
