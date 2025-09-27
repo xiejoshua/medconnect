@@ -1,0 +1,15 @@
+# Backend (FastAPI) for MedConnect
+
+This is a minimal FastAPI app that provides a `/api/search` endpoint used by the `medical-platform` frontend.
+
+Run locally:
+
+```bash
+cd server
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+The endpoint: `GET /api/search?q=<query>` returns a JSON array of doctor objects.
