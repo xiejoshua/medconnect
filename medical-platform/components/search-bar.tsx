@@ -3,12 +3,23 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 export function SearchBar() {
   const [query, setQuery] = useState("")
+  const router = useRouter()
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (query.trim()) {
+      router.push(`/specialists?q=${encodeURIComponent(query)}`)
+    } else {
+      router.push("/specialists")
+    }
+  /*
   const [results, setResults] = useState<any[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -31,6 +42,7 @@ export function SearchBar() {
     } finally {
       setLoading(false)
     }
+      */
   }
 
   return (
@@ -74,22 +86,7 @@ export function SearchBar() {
         <button className="text-primary hover:underline">Orthopedics</button>
       </div>
 
-      {/* Results */}
-      <div className="mt-8 text-center">
-        {loading && <p>Searching…</p>}
-        {error && <p className="text-red-600">{error}</p>}
-        {results && (
-          <div className="mt-4 space-y-3 max-w-2xl mx-auto">
-            {results.length === 0 && <p>No specialists found.</p>}
-            {results.map((r: any) => (
-              <div key={r.id} className="p-3 bg-card rounded-md border">
-                <div className="text-lg font-semibold">{r.name}</div>
-                <div className="text-sm text-muted-foreground">{r.specialty} — {r.hospital}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      
     </div>
   )
 }
