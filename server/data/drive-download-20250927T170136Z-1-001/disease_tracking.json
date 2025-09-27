@@ -1,0 +1,68 @@
+{
+  "diseases_with_investigators": [
+    "Huntington Disease",
+    "Cystic Fibrosis",
+    "Sickle Cell Disease",
+    "Duchenne Muscular Dystrophy",
+    "Spinal Muscular Atrophy",
+    "Hemophilia A",
+    "Fabry Disease",
+    "Gaucher Disease",
+    "Marfan Syndrome",
+    "Wilson Disease"
+  ],
+  "diseases_no_investigators": [],
+  "diseases_api_errors": [],
+  "disease_statistics": {
+    "Huntington Disease": {
+      "studies_found": 10,
+      "investigators_extracted": 11,
+      "timestamp": "2025-09-27T06:06:13.812006"
+    },
+    "Cystic Fibrosis": {
+      "studies_found": 10,
+      "investigators_extracted": 12,
+      "timestamp": "2025-09-27T06:06:16.079306"
+    },
+    "Sickle Cell Disease": {
+      "studies_found": 10,
+      "investigators_extracted": 11,
+      "timestamp": "2025-09-27T06:06:18.209583"
+    },
+    "Duchenne Muscular Dystrophy": {
+      "studies_found": 10,
+      "investigators_extracted": 10,
+      "timestamp": "2025-09-27T06:06:20.408425"
+    },
+    "Spinal Muscular Atrophy": {
+      "studies_found": 10,
+      "investigators_extracted": 12,
+      "timestamp": "2025-09-27T06:06:22.513988"
+    },
+    "Hemophilia A": {
+      "studies_found": 10,
+      "investigators_extracted": 12,
+      "timestamp": "2025-09-27T06:06:24.887485"
+    },
+    "Fabry Disease": {
+      "studies_found": 10,
+      "investigators_extracted": 11,
+      "timestamp": "2025-09-27T06:06:27.035794"
+    },
+    "Gaucher Disease": {
+      "studies_found": 10,
+      "investigators_extracted": 10,
+      "timestamp": "2025-09-27T06:06:29.163738"
+    },
+    "Marfan Syndrome": {
+      "studies_found": 10,
+      "investigators_extracted": 12,
+      "timestamp": "2025-09-27T06:06:31.265039"
+    },
+    "Wilson Disease": {
+      "studies_found": 10,
+      "investigators_extracted": 10,
+      "timestamp": "2025-09-27T06:06:33.375762"
+    }
+  }
+}
