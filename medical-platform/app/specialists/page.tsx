@@ -3,7 +3,7 @@
 import type React from 'react'
 
 import { useState } from "react"
-import { Search, MapPin, Star, Phone, Mail, Calendar } from "lucide-react"
+import { Search, MapPin, Phone, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -17,31 +17,17 @@ const specialists = [
     id: 1,
     name: "Dr. Sarah Chen",
     specialty: "Cardiology",
-    rating: 4.9,
-    reviews: 127,
     location: "Downtown Medical Center",
-    distance: "2.3 miles",
     phone: "(555) 123-4567",
     email: "s.chen@medcenter.com",
-    experience: "15+ years",
-    education: "Harvard Medical School",
-    languages: ["English", "Mandarin"],
-    nextAvailable: "Tomorrow 2:00 PM",
   },
   {
     id: 2,
     name: "Dr. Michael Rodriguez",
     specialty: "Neurology",
-    rating: 4.8,
-    reviews: 89,
     location: "University Hospital",
-    distance: "3.1 miles",
     phone: "(555) 987-6543",
     email: "m.rodriguez@unihospital.com",
-    experience: "12+ years",
-    education: "Johns Hopkins University",
-    languages: ["English", "Spanish"],
-    nextAvailable: "Friday 10:30 AM",
   },
   {
     id: 3,
@@ -50,13 +36,8 @@ const specialists = [
     rating: 4.9,
     reviews: 156,
     location: "Cancer Treatment Center",
-    distance: "1.8 miles",
     phone: "(555) 456-7890",
     email: "e.watson@cancercenter.com",
-    experience: "18+ years",
-    education: "Mayo Clinic",
-    languages: ["English", "French"],
-    nextAvailable: "Monday 9:00 AM",
   },
 ]
 
@@ -94,7 +75,7 @@ export default function SearchResultsPage() {
               <Search className="absolute left-4 h-5 w-5 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Search by name, specialty, or condition..."
+                placeholder="Search by condition..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="pl-12 pr-24 h-12 text-base bg-card border-2 border-border focus:border-primary transition-colors"
@@ -109,7 +90,7 @@ export default function SearchResultsPage() {
           </form>
 
           <div className="text-sm text-muted-foreground">
-            Showing {filteredSpecialists.length} specialists in your area
+            Showing {filteredSpecialists.length} rare disease specialists
           </div>
         </div>
       </div>
@@ -130,36 +111,14 @@ export default function SearchResultsPage() {
                           {specialist.specialty}
                         </Badge>
                       </div>
-
-                      <div className="flex items-center gap-1">
-                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                        <span className="font-medium">{specialist.rating}</span>
-                        <span className="text-muted-foreground">({specialist.reviews} reviews)</span>
-                      </div>
                     </div>
-
-                    {/* Location and Distance */}
+                    {/* Location */}
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <MapPin className="h-4 w-4" />
                       <span>
-                        {specialist.location} • {specialist.distance}
+                        {specialist.location}
                       </span>
                     </div>
-
-                    {/* Experience and Education */}
-                    <div className="text-sm text-muted-foreground">
-                      <span className="font-medium">{specialist.experience}</span> • {specialist.education}
-                    </div>
-
-                    {/* Languages */}
-                    <div className="flex flex-wrap gap-1">
-                      {specialist.languages.map((language) => (
-                        <Badge key={language} variant="outline" className="text-xs">
-                          {language}
-                        </Badge>
-                      ))}
-                    </div>
-
                     {/* Contact and Availability */}
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 border-t border-border">
                       <div className="flex flex-col sm:flex-row gap-4 text-sm">
@@ -172,15 +131,12 @@ export default function SearchResultsPage() {
                           <span>{specialist.email}</span>
                         </div>
                       </div>
-
                       <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <Calendar className="h-4 w-4" />
-                          <span>Next: {specialist.nextAvailable}</span>
-                        </div>
-                        <Button size="sm" className="bg-primary hover:bg-primary/90">
-                          Book Appointment
-                        </Button>
+                        <a href={"mailto:" + specialist.email}>
+                          <Button size="sm" className="bg-primary hover:bg-primary/90">
+                          Contact
+                          </Button>
+                        </a>
                       </div>
                     </div>
                   </div>
