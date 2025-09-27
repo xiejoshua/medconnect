@@ -1,38 +1,26 @@
-from fastapi import FastAPI, Query
-from pydantic import BaseModel
-from typing import List, Optional
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 
-app = FastAPI()
-
-
-class Doctor(BaseModel):
-    id: int
-    name: str
-    specialty: str
-    hospital: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    conditions: Optional[List[str]] = []
+app = Flask(__name__)
+# Keep CORS enabled for common local dev hosts; adjust when deploying or locking down origins.
+CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173"])
 
 
-DOCTORS = [
-    Doctor(id=1, name='Dr. Alice Nguyen', specialty='Genetics', hospital='Central University Hospital', email='alice.nguyen@example.org', phone='555-0101', conditions=['Fabry disease', 'Gaucher disease']),
-    Doctor(id=2, name='Dr. Ben Carter', specialty='Neurology', hospital='Westside Medical', email='ben.carter@example.org', phone='555-0102', conditions=['Wilson disease', 'Huntington disease']),
-    Doctor(id=3, name='Dr. Chen Li', specialty='Metabolic Disorders', hospital="Children's Research Clinic", email='chen.li@example.org', phone='555-0103', conditions=['Phenylketonuria', 'Maple syrup urine disease']),
-    Doctor(id=4, name='Dr. Dana Smith', specialty='Rheumatology', hospital='North Medical Center', email='dana.smith@example.org', phone='555-0104', conditions=['Ehlers-Danlos syndrome', 'Marfan syndrome']),
-]
+@app.route('/api/search')
+def search():
+    """Placeholder search endpoint.
+
+    Returns an empty list while the real data import / clustering pipeline is being prepared.
+    Do not add seed data here — import will populate a database or index later.
+    """
+    # intentionally return an empty array for now
+    return jsonify([])
 
 
-@app.get('/api/search', response_model=List[Doctor])
-def search(q: str = Query(..., min_length=1)):
-    qlow = q.lower()
-    results = []
-    for d in DOCTORS:
-        if qlow in d.specialty.lower():
-            results.append(d)
-            continue
-        for cond in d.conditions or []:
-            if qlow in cond.lower():
-                results.append(d)
-                break
-    return results
+@app.route('/health')
+def health():
+    return jsonify({"status": "ok"})
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8000, debug=True)
