@@ -111,7 +111,7 @@ export default function SearchResultsPage() {
                           {specialist.specialty}
                         </Badge>
                       </div>
-
+                    </div>
                     {/* Location */}
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <MapPin className="h-4 w-4" />
@@ -119,7 +119,6 @@ export default function SearchResultsPage() {
                         {specialist.location}
                       </span>
                     </div>
-
                     {/* Contact and Availability */}
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 border-t border-border">
                       <div className="flex flex-col sm:flex-row gap-4 text-sm">
@@ -132,7 +131,6 @@ export default function SearchResultsPage() {
                           <span>{specialist.email}</span>
                         </div>
                       </div>
-
                       <div className="flex items-center gap-3">
                         <a href={"mailto:" + specialist.email}>
                           <Button size="sm" className="bg-primary hover:bg-primary/90">
