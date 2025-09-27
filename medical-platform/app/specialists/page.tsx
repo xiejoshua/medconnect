@@ -56,18 +56,21 @@ const specialists = [
 ]
 
 export default function SearchResultsPage() {
-    const [query, setQuery] = useState("")
-    const [filteredSpecialists, setFilteredSpecialists] = useState(specialists)
+    const [query, setQuery] = useState("");
+    const [hasSearched, setHasSearched] = useState(false);
+    const [filteredSpecialists, setFilteredSpecialists] = useState<typeof specialists>([]);
 
-    const router = useRouter();
     const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    const filtered = specialists.filter(
-      (specialist) =>
-        specialist.name.toLowerCase().includes(query.toLowerCase()) ||
-        specialist.specialty.toLowerCase().includes(query.toLowerCase()),
-    )
-    setFilteredSpecialists(filtered)
+      e.preventDefault();
+      const q = query.trim().toLowerCase();
+      setHasSearched(true);
+
+      const filtered = specialists.filter(
+        (specialist) =>
+          specialist.specialty.toLowerCase().includes(query.toLowerCase()),
+      )
+      
+      setFilteredSpecialists(filtered)
     }
 
     return (
@@ -75,9 +78,11 @@ export default function SearchResultsPage() {
       {/* Header with Logo */}
       <header className="w-full px-6 py-6 flex justify-between items-center border-b border-border">
         <div className="text-2xl font-semibold text-foreground tracking-tight">MedConnect</div>
-        <Button variant="outline" size="sm" className="bg-white text-black hover:bg-gray-100" onClick={() => router.push('/')}> 
-          Back to Home
-        </Button>
+        <a href="/">
+          <Button variant="outline" size="sm" className="bg-white text-black hover:bg-gray-100"> 
+            Back to Home
+          </Button>
+        </a>
       </header>
 
       {/* Search Section */}
@@ -130,10 +135,10 @@ export default function SearchResultsPage() {
                       {/* Insurance Provider */}
                     <div className="flex items-center gap-1 text-sm">
                         <span className="text-muted-foreground">{specialist.insuranceProvider && (
-  <div className="text-sm text-muted-foreground">
-    Insurance Provider: {specialist.insuranceProvider}
-  </div>
-)}</span>
+                          <div className="text-sm text-muted-foreground">
+                            Insurance Provider: {specialist.insuranceProvider}
+                          </div>
+                        )}</span>
                     </div>
 
                     </div>
