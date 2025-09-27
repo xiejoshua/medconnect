@@ -55,49 +55,77 @@ def load_data():
         print(f"Successfully loaded {len(specialists_df)} specialists")
         print(f"Found {len(topic_keywords)} topic clusters")
         return True
-        
     except Exception as e:
         print(f"Error loading data: {e}")
         return False
+
+def normalize_text(text: str) -> str:
+    """Normalize text for consistent matching
+    
+    Handles case insensitivity, punctuation, possessives, and common variations
+    in medical terminology like Parkinson's vs Parkinsons.
+    """
+    import re
+    if not isinstance(text, str):
+        return ""
+        
+    # Convert to lowercase and strip
+    text = text.lower().strip()
+    
+    # Handle apostrophes in possessives and contractions
+    text = text.replace("'", "")  # Remove all apostrophes
+    
+    # Remove other punctuation and normalize whitespace
+    text = re.sub(r"[^\w\s]", " ", text)  # Keep only alphanumeric and whitespace
+    text = re.sub(r"\s+", " ", text).strip()  # Normalize multiple spaces
+    
+    # Handle common variations in medical terminology
+    text = text.replace("disease", "diseases")
+    text = text.replace("syndrome", "syndromes")
+    text = text.replace("condition", "conditions")
+    return text
 
 def filter_specialists(query: str, location: str = None, max_results: int = 20) -> List[Dict]:
     """Filter specialists based on search criteria"""
     if specialists_df is None:
         return []
-    
+
     start_time = time.time()
-    
+
+    # Normalize query for better matching
+    query_normalized = normalize_text(query)
+    query_words = query_normalized.split()
+
     # Find matching topics first
     matching_topics = []
-    query_lower = query.lower()
-    
     for topic_id, keywords in topic_keywords.items():
         if topic_id == '-1':  # Skip outlier topic
             continue
         for keyword in keywords:
-            if query_lower in keyword.lower() or keyword.lower() in query_lower:
+            keyword_normalized = normalize_text(keyword)
+            if query_normalized in keyword_normalized or keyword_normalized in query_normalized:
                 try:
                     matching_topics.append(int(topic_id))
                     break
                 except ValueError:
                     continue
-    
+
     # Filter by matching topics if found
     if matching_topics:
         filtered_df = specialists_df[specialists_df['topic_cluster'].isin(matching_topics)].copy()
     else:
         filtered_df = specialists_df.copy()
-    
-    # Location filtering
+
+    # Location filtering with normalized comparison
     if location:
-        location_lower = location.lower()
+        location_norm = normalize_text(location)
         location_mask = (
-            filtered_df['state'].str.lower().str.contains(location_lower, na=False) |
-            filtered_df['city'].str.lower().str.contains(location_lower, na=False)
+            filtered_df['state'].fillna('').apply(normalize_text).str.contains(location_norm, na=False) |
+            filtered_df['city'].fillna('').apply(normalize_text).str.contains(location_norm, na=False)
         )
         filtered_df = filtered_df[location_mask]
-    
-    # Text-based scoring
+
+    # Text-based scoring with improved matching
     scores = []
     for _, row in filtered_df.iterrows():
         score = 0
@@ -107,21 +135,20 @@ def filter_specialists(query: str, location: str = None, max_results: int = 20) 
             str(row.get('specialty', '')),
             str(row.get('clinical_focus', ''))
         ]
-        
+
         for field in text_fields:
-            field_lower = field.lower()
-            if query_lower in field_lower:
+            field_normalized = normalize_text(field)
+            if query_normalized in field_normalized:
                 score += 2  # Exact substring match
             # Check for partial word matches
-            query_words = query_lower.split()
             for word in query_words:
-                if word in field_lower:
+                if word in field_normalized:
                     score += 1
-        
+
         scores.append(score)
-    
+
     filtered_df['search_score'] = scores
-    
+
     # Sort by score, then by relevancy score
     results = filtered_df[filtered_df['search_score'] > 0].copy()
     if len(results) == 0:
