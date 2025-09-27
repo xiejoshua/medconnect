@@ -21,6 +21,7 @@ const specialists = [
     location: "Downtown Medical Center",
     phone: "(555) 123-4567",
     email: "s.chen@medcenter.com",
+    
   },
   {
     id: 2,
@@ -102,7 +103,7 @@ export default function SearchResultsPage() {
         <div className="max-w-4xl mx-auto space-y-6">
           {filteredSpecialists.map((specialist) => (
             <Card key={specialist.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-              <CardContent className="py-2 px-6">
+              <CardContent className="py-1 px-6">
                 <div className="flex flex-col md:flex-row gap-6">
                   {/* Main Info */}
                   <div className="flex-1 space-y-3">
@@ -113,6 +114,12 @@ export default function SearchResultsPage() {
                           {specialist.specialty}
                         </Badge>
                       </div>
+
+                      {/* Insurance Provider */}
+                    <div className="flex items-center gap-1 text-sm">
+                        <span className="text-muted-foreground">Insurance Provider: (variable)</span>
+                    </div>
+
                     </div>
                     {/* Location */}
                     <div className="flex items-center gap-2 text-muted-foreground">
@@ -121,6 +128,7 @@ export default function SearchResultsPage() {
                         {specialist.location}
                       </span>
                     </div>
+                    
                     {/* Contact and Availability */}
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 border-t border-border">
                       <div className="flex flex-col sm:flex-row gap-4 text-sm">
