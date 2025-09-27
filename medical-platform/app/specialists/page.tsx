@@ -2,9 +2,9 @@
 
 import type React from 'react'
 
-import { useState } from "react"
-import { useRouter } from 'next/navigation'
-import { Search, Hospital, MapPin, Phone, Mail } from "lucide-react"
+import { useState, useEffect } from "react"
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Search, Hospital, MapPin, Phone, Mail, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -12,66 +12,174 @@ import { Badge } from "@/components/ui/badge"
 import { BottomDesign } from "@/components/bottom-design"
 import { de } from 'date-fns/locale'
 
-// get data for doctor specialists named 'specialists'
-const specialists = [
+// Interface for specialist data from backend
+interface Specialist {
+  id: string;
+  name: string;
+  first_name: string;
+  last_name: string;
+  hospital: string;
+  specialty: string;
+  research_interests: string;
+  location: {
+    city: string;
+    state: string;
+    country: string;
+  };
+  contact: {
+    email: string;
+    phone: string;
+    website: string;
+  };
+  scores: {
+    search_score: number;
+    relevancy_score: number;
+    topic_confidence: number;
+  };
+  topic_cluster: number;
+  npi: string;
+}
+
+// Fallback static data
+const fallbackSpecialists: Specialist[] = [
   {
-    id: 1,
-    name: "Anne-Catherine Bachoud-Levi, MD, PhD",
+    id: "1",
+    name: "Anne-Catherine Bachoud-Levi",
+    first_name: "Anne-Catherine",
+    last_name: "Bachoud-Levi",
+    hospital: "Assistance Publique - Hôpitaux de Paris",
     specialty: "Huntington's Disease",
-    institution: "Assistance Publique - Hôpitaux de Paris",
-    city: "Créteil",
-    state: null,
-    country: "France",
-    zip_code: "94010",
-    phone: "(555) 123-4567",
-    email: "s.chen@medcenter.com",
-    insuranceProvider: null,
+    research_interests: "Neurodegenerative diseases, clinical trials",
+    location: {
+      city: "Créteil",
+      state: "",
+      country: "France"
+    },
+    contact: {
+      email: "s.chen@medcenter.com",
+      phone: "(555) 123-4567",
+      website: ""
+    },
+    scores: {
+      search_score: 10,
+      relevancy_score: 0.85,
+      topic_confidence: 0.9
+    },
+    topic_cluster: 1,
+    npi: ""
   },
   {
-    id: 2,
-    name: "Helen Thackray, MD",
+    id: "2",
+    name: "Helen Thackray",
+    first_name: "Helen",
+    last_name: "Thackray",
+    hospital: "GlycoMimetics Incorporated",
     specialty: "Neurology",
-    institution: "GlycoMimetics Incorporated",
-    city: "Oakland",
-    state: "California",
-    country: "United States",
-    zip_code: "94609",
-    phone: "(555) 987-6543",
-    email: "m.rodriguez@unihospital.com",
-    insuranceProvider: "Medicare"
+    research_interests: "Rare neurological disorders",
+    location: {
+      city: "Oakland",
+      state: "California",
+      country: "United States"
+    },
+    contact: {
+      email: "m.rodriguez@unihospital.com",
+      phone: "(555) 987-6543",
+      website: ""
+    },
+    scores: {
+      search_score: 8,
+      relevancy_score: 0.75,
+      topic_confidence: 0.8
+    },
+    topic_cluster: 2,
+    npi: ""
   },
   {
-    id: 3,
-    name: "André M Cantin, M.D.",
-    specialty: "Neurology",
-    institution: "Centre de recherche du Centre hospitalier universitaire de Sherbrooke",
-    city: "Sherbrooke",
-    state: "Quebec",
-    country: "Canada",
-    zip_code: "J1H 5N4",
-    phone: "(555) 987-6543",
-    email: "m.rodriguez@unihospital.com",
-    insuranceProvider: null
+    id: "3",
+    name: "André M Cantin",
+    first_name: "André",
+    last_name: "Cantin",
+    hospital: "Centre de recherche du Centre hospitalier universitaire de Sherbrooke",
+    specialty: "Cystic Fibrosis",
+    research_interests: "Pulmonary medicine, genetic disorders",
+    location: {
+      city: "Sherbrooke",
+      state: "Quebec",
+      country: "Canada"
+    },
+    contact: {
+      email: "a.cantin@usherbrooke.ca",
+      phone: "(555) 987-6543",
+      website: ""
+    },
+    scores: {
+      search_score: 9,
+      relevancy_score: 0.88,
+      topic_confidence: 0.92
+    },
+    topic_cluster: 3,
+    npi: ""
   },
 ]
 
 export default function SearchResultsPage() {
     const [query, setQuery] = useState("");
+    const [specialists, setSpecialists] = useState<Specialist[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [hasSearched, setHasSearched] = useState(false);
-    const [filteredSpecialists, setFilteredSpecialists] = useState<typeof specialists>([]);
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
+    // Get initial query from URL
+    useEffect(() => {
+      const urlQuery = searchParams.get('q');
+      if (urlQuery) {
+        setQuery(urlQuery);
+        performSearch(urlQuery);
+      }
+    }, [searchParams]);
+
+    const performSearch = async (searchQuery: string) => {
+      if (!searchQuery.trim()) return;
+      
+      setLoading(true);
+      setError(null);
+      setHasSearched(true);
+      
+      try {
+        const response = await fetch(`http://localhost:8000/api/specialists/search?q=${encodeURIComponent(searchQuery)}`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          setSpecialists(data.results);
+        } else {
+          throw new Error(data.error || 'Search failed');
+        }
+      } catch (err) {
+        console.error('Search error:', err);
+        setError(err instanceof Error ? err.message : 'An error occurred while searching');
+        // Fallback to static data
+        setSpecialists(fallbackSpecialists);
+      } finally {
+        setLoading(false);
+      }
+    };
 
     const handleSearch = (e: React.FormEvent) => {
       e.preventDefault();
-      const q = query.trim().toLowerCase();
-      setHasSearched(true);
-
-      const filtered = specialists.filter(
-        (specialist) =>
-          specialist.specialty.toLowerCase().includes(query.toLowerCase()),
-      )
-      
-      setFilteredSpecialists(filtered)
-    }
+      const trimmedQuery = query.trim();
+      if (trimmedQuery) {
+        // Update URL
+        router.push(`/specialists?q=${encodeURIComponent(trimmedQuery)}`);
+        performSearch(trimmedQuery);
+      }
+    };
 
     return (
         <main className="min-h-screen bg-background flex flex-col">
@@ -110,7 +218,8 @@ export default function SearchResultsPage() {
           </form>
 
           <div className="text-sm text-muted-foreground">
-            Showing {filteredSpecialists.length} rare disease specialists
+            {loading ? 'Searching...' : hasSearched ? `Showing ${specialists.length} rare disease specialists` : 'Enter a search term to find specialists'}
+            {error && <div className="text-red-500 mt-2">Error: {error}</div>}
           </div>
         </div>
       </div>
@@ -118,7 +227,14 @@ export default function SearchResultsPage() {
       {/* Results Section */}
       <div className="flex-1 px-6 py-8">
         <div className="max-w-4xl mx-auto space-y-6">
-          {filteredSpecialists.map((specialist) => (
+          {loading && (
+            <div className="text-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+              <div className="text-muted-foreground">Searching specialists...</div>
+            </div>
+          )}
+          
+          {!loading && specialists.map((specialist) => (
             <Card key={specialist.id} className="overflow-hidden hover:shadow-lg transition-shadow">
               <CardContent className="py-1 px-6">
                 <div className="flex flex-col md:flex-row gap-6">
@@ -130,50 +246,54 @@ export default function SearchResultsPage() {
                         <Badge variant="secondary" className="mt-2">
                           {specialist.specialty}
                         </Badge>
+                        {specialist.research_interests && (
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Research: {specialist.research_interests}
+                          </div>
+                        )}
                       </div>
 
-                      {/* Insurance Provider */}
-                    <div className="flex items-center gap-1 text-sm">
-                        <span className="text-muted-foreground">{specialist.insuranceProvider && (
-                          <div className="text-sm text-muted-foreground">
-                            Insurance Provider: {specialist.insuranceProvider}
-                          </div>
-                        )}</span>
-                    </div>
+
 
                     </div>
                     {/* Location */}
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <MapPin className="h-4 w-4" />
                       <span>
-                        {(specialist.state != null) ? specialist.city + ", " + specialist.state + ", " + specialist.country + " " + specialist.zip_code : specialist.city + ", " + specialist.country + " " + specialist.zip_code}
+                        {[specialist.location?.city, specialist.location?.state, specialist.location?.country].filter(Boolean).join(', ')}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Hospital className="h-4 w-5" />
                       <span>
-                        {specialist.institution}
+                        {specialist.hospital || 'N/A'}
                       </span>
                     </div>
                     
                     {/* Contact and Availability */}
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-2 border-t border-border">
                       <div className="flex flex-col sm:flex-row gap-4 text-sm">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Phone className="h-4 w-4" />
-                          <span>{specialist.phone}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Mail className="h-4 w-4" />
-                          <span>{specialist.email}</span>
-                        </div>
+                        {specialist.contact?.phone && (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Phone className="h-4 w-4" />
+                            <span>{specialist.contact.phone}</span>
+                          </div>
+                        )}
+                        {specialist.contact?.email && (
+                          <div className="flex items-center gap-2 text-muted-foreground">
+                            <Mail className="h-4 w-4" />
+                            <span>{specialist.contact.email}</span>
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-3">
-                        <a href={"mailto:" + specialist.email}>
-                          <Button size="sm" className="bg-primary hover:bg-primary/90">
-                          Contact
-                          </Button>
-                        </a>
+                        {specialist.contact?.email && (
+                          <a href={`mailto:${specialist.contact.email}`}>
+                            <Button size="sm" className="bg-primary hover:bg-primary/90">
+                            Contact
+                            </Button>
+                          </a>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -182,15 +302,17 @@ export default function SearchResultsPage() {
             </Card>
           ))}
 
-          {filteredSpecialists.length === 0 && (
+          {!loading && hasSearched && specialists.length === 0 && (
             <div className="text-center py-12">
               <div className="text-muted-foreground text-lg">No specialists found matching your search.</div>
               <Button
                 variant="outline"
                 className="mt-4 bg-white text-black hover:bg-gray-100"
                 onClick={() => {
-                  setQuery("")
-                  setFilteredSpecialists(specialists)
+                  setQuery("");
+                  setSpecialists([]);
+                  setHasSearched(false);
+                  router.push('/specialists');
                 }}
               >
                 Clear Search

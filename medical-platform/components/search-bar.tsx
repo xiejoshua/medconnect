@@ -10,44 +10,79 @@ import { Input } from "@/components/ui/input"
 
 export function SearchBar() {
   const [query, setQuery] = useState("")
-  const router = useRouter()
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (query.trim()) {
-      router.push(`/specialists?q=${encodeURIComponent(query)}`)
-    } else {
-      router.push("/specialists")
-    }
-  /*
-  const [results, setResults] = useState<any[] | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+
+  async function getSpecialists(query: string) {
+    const base = process.env.NEXT_PUBLIC_API_BASE ?? ''
+    const url = base ? `${base}/api/search?q=${encodeURIComponent(query)}` : `/api/search?q=${encodeURIComponent(query)}`
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(await res.text())
+    const data = await res.json()
+    return data
+  }
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!query.trim()) return
+    
     setLoading(true)
     setError(null)
-    setResults(null)
+    
     try {
-      const base = process.env.NEXT_PUBLIC_API_BASE ?? ''
-      const url = base ? `${base}/api/search?q=${encodeURIComponent(query)}` : `/api/search?q=${encodeURIComponent(query)}`
-      const res = await fetch(url)
-      if (!res.ok) throw new Error(await res.text())
-      const data = await res.json()
-      setResults(data)
+      // Make request to your backend API
+      const response = await fetch(`http://localhost:8000/api/specialists/search?q=${encodeURIComponent(query)}`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        // Navigate to specialists page with the query parameter
+        // The specialists page will make its own API call based on the URL param
+        router.push(`/specialists?q=${encodeURIComponent(query)}`)
+      } else {
+        throw new Error(data.error || 'Search failed')
+      }
     } catch (err: any) {
-      setError(err?.message ?? 'Unknown error')
+      console.error('Search error:', err)
+      setError(err?.message ?? 'An error occurred while searching')
+      // Still navigate to specialists page so user can see the error
+      router.push(`/specialists?q=${encodeURIComponent(query)}`)
     } finally {
       setLoading(false)
     }
-      */
   }
 
-  const handleQuickSearch = (searchTerm: string) => {
+  const handleQuickSearch = async (searchTerm: string) => {
     setQuery(searchTerm)
-    router.push(`/specialists?q=${encodeURIComponent(searchTerm)}`)
+    setLoading(true)
+    setError(null)
+    
+    try {
+      const response = await fetch(`http://localhost:8000/api/specialists/search?q=${encodeURIComponent(searchTerm)}`)
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        router.push(`/specialists?q=${encodeURIComponent(searchTerm)}`)
+      } else {
+        throw new Error(data.error || 'Search failed')
+      }
+    } catch (err: any) {
+      console.error('Quick search error:', err)
+      setError(err?.message ?? 'An error occurred while searching')
+      router.push(`/specialists?q=${encodeURIComponent(searchTerm)}`)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -73,12 +108,19 @@ export function SearchBar() {
           />
           <Button
             type="submit"
-            className="absolute right-2 h-10 px-6 bg-primary hover:bg-primary/90 text-primary-foreground"
+            disabled={loading}
+            className="absolute right-2 h-10 px-6 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50"
           >
-            Search
+            {loading ? "Searching..." : "Search"}
           </Button>
         </div>
       </form>
+
+      {error && (
+        <div className="text-center text-red-500 text-sm mt-2">
+          {error}
+        </div>
+      )}
 
       <div className="flex flex-wrap justify-center gap-2 text-sm text-muted-foreground">
         <span>Common searches:</span>
