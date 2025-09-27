@@ -10,8 +10,6 @@ import { Input } from "@/components/ui/input"
 
 export function SearchBar() {
   const [query, setQuery] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   async function getSpecialists(query: string) {
@@ -23,66 +21,18 @@ export function SearchBar() {
     return data
   }
 
-  const handleSearch = async (e: React.FormEvent) => {
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!query.trim()) return
-    
-    setLoading(true)
-    setError(null)
-    
-    try {
-      // Make request to your backend API
-      const response = await fetch(`http://localhost:8000/api/specialists/search?q=${encodeURIComponent(query)}`)
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const data = await response.json()
-      
-      if (data.success) {
-        // Navigate to specialists page with the query parameter
-        // The specialists page will make its own API call based on the URL param
-        router.push(`/specialists?q=${encodeURIComponent(query)}`)
-      } else {
-        throw new Error(data.error || 'Search failed')
-      }
-    } catch (err: any) {
-      console.error('Search error:', err)
-      setError(err?.message ?? 'An error occurred while searching')
-      // Still navigate to specialists page so user can see the error
+    if (query.trim()) {
       router.push(`/specialists?q=${encodeURIComponent(query)}`)
-    } finally {
-      setLoading(false)
+    } else {
+      router.push("/specialists")
     }
   }
 
-  const handleQuickSearch = async (searchTerm: string) => {
+  const handleQuickSearch = (searchTerm: string) => {
     setQuery(searchTerm)
-    setLoading(true)
-    setError(null)
-    
-    try {
-      const response = await fetch(`http://localhost:8000/api/specialists/search?q=${encodeURIComponent(searchTerm)}`)
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
-      const data = await response.json()
-      
-      if (data.success) {
-        router.push(`/specialists?q=${encodeURIComponent(searchTerm)}`)
-      } else {
-        throw new Error(data.error || 'Search failed')
-      }
-    } catch (err: any) {
-      console.error('Quick search error:', err)
-      setError(err?.message ?? 'An error occurred while searching')
-      router.push(`/specialists?q=${encodeURIComponent(searchTerm)}`)
-    } finally {
-      setLoading(false)
-    }
+    router.push(`/specialists?q=${encodeURIComponent(searchTerm)}`)
   }
 
   return (
@@ -108,19 +58,12 @@ export function SearchBar() {
           />
           <Button
             type="submit"
-            disabled={loading}
-            className="absolute right-2 h-10 px-6 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50"
+            className="absolute right-2 h-10 px-6 bg-primary hover:bg-primary/90 text-primary-foreground"
           >
-            {loading ? "Searching..." : "Search"}
+            Search
           </Button>
         </div>
       </form>
-
-      {error && (
-        <div className="text-center text-red-500 text-sm mt-2">
-          {error}
-        </div>
-      )}
 
       <div className="flex flex-wrap justify-center gap-2 text-sm text-muted-foreground">
         <span>Common searches:</span>
