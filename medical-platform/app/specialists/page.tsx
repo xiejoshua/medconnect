@@ -19,7 +19,7 @@ const specialists = [
     specialty: "Cardiology",
     rating: 4.9,
     reviews: 127,
-    location: "Downtown Medical Center",
+    location: "Downtown Medical Center// contains the relevant specialists and their data",
     distance: "2.3 miles",
     phone: "(555) 123-4567",
     email: "s.chen@medcenter.com",
