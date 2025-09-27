@@ -4,7 +4,7 @@ import type React from 'react'
 
 import { useState } from "react"
 import { useRouter } from 'next/navigation'
-import { Search, MapPin, Phone, Mail } from "lucide-react"
+import { Search, Hospital, MapPin, Phone, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -16,30 +16,42 @@ import { de } from 'date-fns/locale'
 const specialists = [
   {
     id: 1,
-    name: "Dr. Sarah Chen",
-    specialty: "Cardiology",
-    location: "Downtown Medical Center",
+    name: "Anne-Catherine Bachoud-Levi, MD, PhD",
+    specialty: "Huntington's Disease",
+    institution: "Assistance Publique - Hôpitaux de Paris",
+    city: "Créteil",
+    state: null,
+    country: "France",
+    zip_code: "94010",
     phone: "(555) 123-4567",
     email: "s.chen@medcenter.com",
-    
+    insuranceProvider: null,
   },
   {
     id: 2,
-    name: "Dr. Michael Rodriguez",
+    name: "Helen Thackray, MD",
     specialty: "Neurology",
-    location: "University Hospital",
+    institution: "GlycoMimetics Incorporated",
+    city: "Oakland",
+    state: "California",
+    country: "United States",
+    zip_code: "94609",
     phone: "(555) 987-6543",
     email: "m.rodriguez@unihospital.com",
+    insuranceProvider: "Medicare"
   },
   {
     id: 3,
-    name: "Dr. Emily Watson",
-    specialty: "Oncology",
-    rating: 4.9,
-    reviews: 156,
-    location: "Cancer Treatment Center",
-    phone: "(555) 456-7890",
-    email: "e.watson@cancercenter.com",
+    name: "André M Cantin, M.D.",
+    specialty: "Neurology",
+    institution: "Centre de recherche du Centre hospitalier universitaire de Sherbrooke",
+    city: "Sherbrooke",
+    state: "Quebec",
+    country: "Canada",
+    zip_code: "J1H 5N4",
+    phone: "(555) 987-6543",
+    email: "m.rodriguez@unihospital.com",
+    insuranceProvider: null
   },
 ]
 
@@ -117,7 +129,11 @@ export default function SearchResultsPage() {
 
                       {/* Insurance Provider */}
                     <div className="flex items-center gap-1 text-sm">
-                        <span className="text-muted-foreground">Insurance Provider: (variable)</span>
+                        <span className="text-muted-foreground">{specialist.insuranceProvider && (
+  <div className="text-sm text-muted-foreground">
+    Insurance Provider: {specialist.insuranceProvider}
+  </div>
+)}</span>
                     </div>
 
                     </div>
@@ -125,7 +141,13 @@ export default function SearchResultsPage() {
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <MapPin className="h-4 w-4" />
                       <span>
-                        {specialist.location}
+                        {(specialist.state != null) ? specialist.city + ", " + specialist.state + ", " + specialist.country + " " + specialist.zip_code : specialist.city + ", " + specialist.country + " " + specialist.zip_code}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Hospital className="h-4 w-5" />
+                      <span>
+                        {specialist.institution}
                       </span>
                     </div>
                     
