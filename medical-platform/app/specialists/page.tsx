@@ -187,7 +187,7 @@ export default function SearchResultsPage() {
               <div className="text-muted-foreground text-lg">No specialists found matching your search.</div>
               <Button
                 variant="outline"
-                className="mt-4 bg-transparent"
+                className="mt-4 bg-white text-black hover:bg-gray-100"
                 onClick={() => {
                   setQuery("")
                   setFilteredSpecialists(specialists)
