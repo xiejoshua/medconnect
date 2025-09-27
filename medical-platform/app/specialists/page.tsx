@@ -62,7 +62,7 @@ export default function SearchResultsPage() {
       {/* Header with Logo */}
       <header className="w-full px-6 py-6 flex justify-between items-center border-b border-border">
         <div className="text-2xl font-semibold text-foreground tracking-tight">MedConnect</div>
-        <Button variant="outline" size="sm" onClick={() => router.push('/')}>
+        <Button variant="outline" size="sm" className="bg-white text-black hover:bg-gray-100" onClick={() => router.push('/')}> 
           Back to Home
         </Button>
       </header>
