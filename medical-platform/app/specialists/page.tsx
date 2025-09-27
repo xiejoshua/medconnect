@@ -33,6 +33,8 @@ const specialists = [
     id: 3,
     name: "Dr. Emily Watson",
     specialty: "Oncology",
+    rating: 4.9,
+    reviews: 156,
     location: "Cancer Treatment Center",
     phone: "(555) 456-7890",
     email: "e.watson@cancercenter.com",
@@ -132,7 +134,7 @@ export default function SearchResultsPage() {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <a href={specialist.email}>
+                        <a href={"mailto:" + specialist.email}>
                           <Button size="sm" className="bg-primary hover:bg-primary/90">
                           Contact
                           </Button>
