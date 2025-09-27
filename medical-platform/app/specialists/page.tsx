@@ -3,6 +3,7 @@
 import type React from 'react'
 
 import { useState } from "react"
+import { useRouter } from 'next/navigation'
 import { Search, MapPin, Phone, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -45,6 +46,7 @@ export default function SearchResultsPage() {
     const [query, setQuery] = useState("")
     const [filteredSpecialists, setFilteredSpecialists] = useState(specialists)
 
+    const router = useRouter();
     const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     const filtered = specialists.filter(
@@ -60,7 +62,7 @@ export default function SearchResultsPage() {
       {/* Header with Logo */}
       <header className="w-full px-6 py-6 flex justify-between items-center border-b border-border">
         <div className="text-2xl font-semibold text-foreground tracking-tight">MedConnect</div>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={() => router.push('/')}>
           Back to Home
         </Button>
       </header>
@@ -100,14 +102,14 @@ export default function SearchResultsPage() {
         <div className="max-w-4xl mx-auto space-y-6">
           {filteredSpecialists.map((specialist) => (
             <Card key={specialist.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-              <CardContent className="p-6">
+              <CardContent className="py-2 px-6">
                 <div className="flex flex-col md:flex-row gap-6">
                   {/* Main Info */}
                   <div className="flex-1 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                       <div>
                         <h3 className="text-xl font-semibold text-foreground">{specialist.name}</h3>
-                        <Badge variant="secondary" className="mt-1">
+                        <Badge variant="secondary" className="mt-2">
                           {specialist.specialty}
                         </Badge>
                       </div>
