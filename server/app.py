@@ -14,6 +14,21 @@ CORS(app)
 specialists_df = None
 topic_keywords = None
 
+# Performance caches - precomputed for speed
+normalized_text_cache = {}
+cluster_lookup = {}
+regex_patterns = {
+    'punctuation': re.compile(r"[^\w\s]"),
+    'whitespace': re.compile(r"\s+"),
+    'gibberish': [
+        re.compile(r'(.)\1{3,}'),
+        re.compile(r'^[aeiou]+$'),
+        re.compile(r'^[bcdfg-z]+$'),
+        re.compile(r'[qxz]{2,}')
+    ]
+}
+precomputed_keywords = set()  # For fast medical query detection
+
 def is_valid_medical_query(query):
     """Filter out nonsensical or inappropriate search terms"""
     if not query or len(query.strip()) < 3:
@@ -88,62 +103,116 @@ def load_data():
             print("Warning: No topic keywords found. Search will be slower.")
             topic_keywords = {}
         
+        # Precompute performance indexes
+        print("Precomputing search indexes...")
+        
+        # Build cluster lookup for O(1) access
+        global cluster_lookup, precomputed_keywords
+        cluster_lookup = {}
+        for cluster_id, keywords in topic_keywords.items():
+            if cluster_id != '-1':
+                normalized_keywords = [normalize_text(kw, use_cache=False) for kw in keywords]
+                cluster_lookup[int(cluster_id)] = {
+                    'keywords': keywords,
+                    'normalized_keywords': normalized_keywords,
+                    'keyword_set': set(normalized_keywords)
+                }
+                # Add to precomputed keywords for fast medical query detection
+                for nkw in normalized_keywords:
+                    precomputed_keywords.add(nkw)
+                    for word in nkw.split():
+                        if len(word) > 2:
+                            precomputed_keywords.add(word)
+        
+        # Pre-normalize frequently used columns for faster filtering
+        if 'state' in specialists_df.columns:
+            specialists_df['_norm_state'] = specialists_df['state'].fillna('').apply(lambda x: normalize_text(str(x), use_cache=False))
+        if 'city' in specialists_df.columns:
+            specialists_df['_norm_city'] = specialists_df['city'].fillna('').apply(lambda x: normalize_text(str(x), use_cache=False))
+        
         print(f"Successfully loaded {len(specialists_df)} specialists")
         print(f"Found {len(topic_keywords)} topic clusters")
+        print(f"Precomputed {len(precomputed_keywords)} medical keywords")
         return True
         
     except Exception as e:
         print(f"Error loading data: {e}")
         return False
 
-def normalize_text(text: str) -> str:
-    """Normalize text for consistent matching"""
+def normalize_text(text: str, use_cache: bool = True) -> str:
+    """Normalize text for consistent matching with caching"""
     if not isinstance(text, str):
         return ""
     
+    # Check cache first for repeated normalizations
+    if use_cache and text in normalized_text_cache:
+        return normalized_text_cache[text]
+    
+    original_text = text
     text = text.lower().strip()
-    text = text.replace("'s", "s")  # parkinson's -> parkinsons
+    
+    # Medical term specific normalizations (faster than general regex)
+    text = text.replace("parkinson's", "parkinson")
+    text = text.replace("parkinsons", "parkinson")
+    text = text.replace("alzheimer's", "alzheimer")
+    text = text.replace("alzheimers", "alzheimer")
+    text = text.replace("'s", "s")
     text = text.replace("'", "")
-    text = re.sub(r"[^\w\s]", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
+    
+    # Use precompiled regex patterns
+    text = regex_patterns['punctuation'].sub(" ", text)
+    text = regex_patterns['whitespace'].sub(" ", text).strip()
+    
+    # Cache the result for repeated use
+    if use_cache and len(normalized_text_cache) < 10000:  # Prevent memory bloat
+        normalized_text_cache[original_text] = text
     
     return text
 
 def score_clusters_by_query(query: str, topic_keywords: Dict) -> List[Tuple]:
     """
-    Score each cluster based on how well its keywords match the query.
-    Returns list of (cluster_id, score, matching_keywords)
+    Optimized cluster scoring with precomputed data and early termination
     """
     query_norm = normalize_text(query)
     query_words = set(query_norm.split())
     
     cluster_scores = []
     
-    for cluster_id, keywords in topic_keywords.items():
-        if cluster_id == '-1':  # Skip outlier cluster
-            continue
-            
+    # Use precomputed cluster lookup for faster access
+    for cluster_id, cluster_data in cluster_lookup.items():
         score = 0
         matching_keywords = []
         
-        for keyword in keywords:
-            keyword_norm = normalize_text(keyword)
-            keyword_words = set(keyword_norm.split())
+        # Quick set intersection check first
+        keyword_set = cluster_data['keyword_set']
+        if not (query_words & keyword_set or query_norm in keyword_set):
+            # No word overlap, check substring matches
+            has_substring_match = False
+            for norm_kw in cluster_data['normalized_keywords']:
+                if query_norm in norm_kw or norm_kw in query_norm:
+                    has_substring_match = True
+                    break
+            if not has_substring_match:
+                continue  # Skip this cluster entirely
+        
+        # Detailed scoring only for promising clusters
+        for i, keyword in enumerate(cluster_data['keywords']):
+            keyword_norm = cluster_data['normalized_keywords'][i]
             
             # Exact match gets highest score
             if query_norm == keyword_norm:
                 score += 10
                 matching_keywords.append((keyword, 10))
-            # Query is contained in keyword
+            # Substring matches
             elif query_norm in keyword_norm:
                 score += 7
                 matching_keywords.append((keyword, 7))
-            # Keyword is contained in query
             elif keyword_norm in query_norm:
                 score += 5
                 matching_keywords.append((keyword, 5))
-            # Word overlap scoring
             else:
+                # Word overlap (using precomputed sets)
+                keyword_words = set(keyword_norm.split())
                 overlap = query_words & keyword_words
                 if overlap:
                     overlap_score = len(overlap) * 2 / max(len(query_words), len(keyword_words))
@@ -152,7 +221,11 @@ def score_clusters_by_query(query: str, topic_keywords: Dict) -> List[Tuple]:
                         matching_keywords.append((keyword, overlap_score))
         
         if score > 0:
-            cluster_scores.append((int(cluster_id), score, matching_keywords))
+            cluster_scores.append((cluster_id, score, matching_keywords))
+            
+            # Early termination: if we found a very high scoring cluster, we can be confident
+            if score > 50:  # Threshold for high confidence match
+                break
     
     cluster_scores.sort(key=lambda x: x[1], reverse=True)
     return cluster_scores
@@ -189,9 +262,9 @@ def get_weighted_keywords(top_clusters: List[Tuple], topic_keywords: Dict, query
             
             keyword_scores.append((kw, kw_score))
         
-        # Sort and keep top 50%
+        # Sort and keep top 30% for speed (was 50%)
         keyword_scores.sort(key=lambda x: x[1], reverse=True)
-        cutoff = max(5, len(keyword_scores) // 2)
+        cutoff = max(3, len(keyword_scores) // 3)  # More aggressive filtering
         top_keywords = keyword_scores[:cutoff]
         
         # Add to weighted keywords
@@ -208,6 +281,84 @@ def get_weighted_keywords(top_clusters: List[Tuple], topic_keywords: Dict, query
     
     return weighted_keywords
 
+def is_simple_query(query: str) -> bool:
+    """Detect if query is simple enough for fast path"""
+    normalized = normalize_text(query)
+    words = normalized.split()
+    return len(words) <= 2 and all(len(word) > 2 for word in words)
+
+def filter_specialists_fast_path(query: str, location: str = None, max_results: int = 20) -> List[Dict]:
+    """Fast path for simple queries - direct keyword matching"""
+    query_norm = normalize_text(query)
+    
+    # Direct cluster filtering
+    matching_clusters = []
+    for cluster_id, cluster_data in cluster_lookup.items():
+        if query_norm in cluster_data['keyword_set']:
+            matching_clusters.append(cluster_id)
+    
+    if not matching_clusters:
+        return []
+    
+    # Filter specialists directly
+    filtered_df = specialists_df[specialists_df['topic_cluster'].isin(matching_clusters)]
+    
+    if location:
+        location_norm = normalize_text(location)
+        location_mask = (
+            filtered_df.get('_norm_state', pd.Series(dtype=str)).str.contains(location_norm, na=False) |
+            filtered_df.get('_norm_city', pd.Series(dtype=str)).str.contains(location_norm, na=False)
+        )
+        filtered_df = filtered_df[location_mask]
+    
+    # Simple scoring by cluster + relevancy_score
+    results = []
+    for idx, row in filtered_df.head(max_results * 2).iterrows():
+        base_score = 5.0 if row.get('topic_cluster') in matching_clusters[:3] else 3.0
+        if 'relevancy_score' in row and pd.notna(row['relevancy_score']):
+            base_score += float(row['relevancy_score']) * 0.5
+        
+        results.append((idx, base_score))
+    
+    results.sort(key=lambda x: x[1], reverse=True)
+    return [format_specialist_result(filtered_df.loc[idx], score) for idx, score in results[:max_results]]
+
+def format_specialist_result(row, score):
+    """Helper to format specialist result"""
+    return {
+        'id': str(row.name),
+        'name': f"{row.get('first_name', '')} {row.get('last_name', '')}".strip(),
+        'first_name': row.get('first_name', ''),
+        'last_name': row.get('last_name', ''),
+        'hospital': row.get('hospital_affiliation', 'N/A'),
+        'specialty': row.get('rare_diseases_treated', 'N/A'),
+        'research_interests': row.get('research_interests', 'N/A'),
+        'location': {
+            'city': row.get('city', ''),
+            'state': row.get('state', ''),
+            'country': row.get('country', '')
+        },
+        'contact': {
+            'email': row.get('email', ''),
+            'phone': row.get('phone', '') or row.get('verified_phone', ''),
+            'website': row.get('website', '')
+        },
+        'scores': {
+            'total_score': round(score, 2),
+            'search_score': round(score, 2),
+            'relevancy_score': float(row.get('relevancy_score', 0)),
+            'topic_confidence': float(row.get('topic_confidence', 0))
+        },
+        'topic_cluster': int(row.get('topic_cluster', -1)),
+        'npi': row.get('npi', ''),
+        'verified_data': {
+            'city': row.get('verified_city', ''),
+            'state': row.get('verified_state', ''),
+            'phone': row.get('verified_phone', ''),
+            'specialty': row.get('verified_specialty', '')
+        }
+    }
+
 def filter_specialists(query: str, location: str = None, max_results: int = 20) -> List[Dict]:
     """Advanced filtering with cluster-based relevancy scoring"""
     if specialists_df is None or topic_keywords is None:
@@ -215,9 +366,17 @@ def filter_specialists(query: str, location: str = None, max_results: int = 20) 
     
     start_time = time.time()
     
-    # Step 1: Score all clusters and get top 10
+    # Fast path for simple queries
+    if is_simple_query(query) and cluster_lookup:
+        results = filter_specialists_fast_path(query, location, max_results)
+        if results:
+            search_time = (time.time() - start_time) * 1000
+            print(f"Fast path search for '{query}' completed in {search_time:.1f}ms, found {len(results)} results")
+            return results
+    
+    # Step 1: Score all clusters and get top 5 (reduced for speed)
     cluster_scores = score_clusters_by_query(query, topic_keywords)
-    top_clusters = cluster_scores[:10]
+    top_clusters = cluster_scores[:3]  # Further reduced for millisecond performance
     
     if not top_clusters:
         # No matching clusters, fallback to basic search
@@ -226,58 +385,93 @@ def filter_specialists(query: str, location: str = None, max_results: int = 20) 
     # Step 2: Get weighted keywords from top clusters
     weighted_keywords = get_weighted_keywords(top_clusters, topic_keywords, query)
     
-    # Step 3: Filter specialists by location first
+    # Step 3: Filter specialists by location first (using precomputed columns)
     if location:
         location_norm = normalize_text(location)
-        filtered_df = specialists_df[
-            specialists_df['state'].fillna('').apply(normalize_text).str.contains(location_norm, na=False) |
-            specialists_df['city'].fillna('').apply(normalize_text).str.contains(location_norm, na=False)
-        ].copy()
+        # Use precomputed normalized columns for faster filtering
+        location_mask = (
+            specialists_df.get('_norm_state', pd.Series(dtype=str)).str.contains(location_norm, na=False) |
+            specialists_df.get('_norm_city', pd.Series(dtype=str)).str.contains(location_norm, na=False)
+        )
+        filtered_df = specialists_df[location_mask].copy()
     else:
-        filtered_df = specialists_df.copy()
+        # Filter by top clusters first to reduce dataset size
+        cluster_ids = [c[0] for c in top_clusters]
+        if len(cluster_ids) > 0:
+            filtered_df = specialists_df[specialists_df['topic_cluster'].isin(cluster_ids)].copy()
+        else:
+            filtered_df = specialists_df.copy()
     
-    # Step 4: Score specialists based on weighted keywords
+    # Step 4: Score specialists based on weighted keywords (optimized)
     specialist_scores = []
+    cluster_ids_set = set(c[0] for c in top_clusters)
     
-    for idx, row in filtered_df.iterrows():
+    # Limit iterations for millisecond performance - more aggressive
+    max_iterations = min(len(filtered_df), 2000)  # Process max 2000 specialists
+    
+    # Sort by existing relevancy_score first to get best candidates early
+    if 'relevancy_score' in filtered_df.columns:
+        filtered_df = filtered_df.sort_values('relevancy_score', ascending=False, na_position='last')
+    
+    for i, (idx, row) in enumerate(filtered_df.iterrows()):
+        if i >= max_iterations:
+            break
+            
         score = 0
         
-        # Define field importance weights
+        # Fast cluster bonus check first
+        specialist_cluster = row.get('topic_cluster', -1)
+        if specialist_cluster in cluster_ids_set:
+            cluster_rank = next(i for i, (cid, _, _) in enumerate(top_clusters) if cid == specialist_cluster)
+            score += (5 - cluster_rank) * 2.0  # Higher cluster bonus for fast filtering
+        
+        # Include existing relevancy score early
+        if 'relevancy_score' in row and pd.notna(row['relevancy_score']):
+            score += float(row['relevancy_score']) * 0.5
+        
+        # Skip detailed field analysis if cluster score is too low
+        if score < 0.5:
+            continue
+        
+        # Optimized field scoring with early termination
         profile_fields = {
             'rare_diseases_treated': 1.5,
             'research_interests': 1.2,
             'clinical_focus': 1.0,
-            'specialty': 0.8,
-            'subspecialty': 0.6
+            'specialty': 0.8
         }
         
         for field_name, field_weight in profile_fields.items():
-            field_text = normalize_text(str(row.get(field_name, '')))
+            field_value = row.get(field_name, '')
+            if not field_value or pd.isna(field_value):
+                continue
+                
+            field_text = normalize_text(str(field_value))
             if not field_text:
                 continue
             
-            # Check each weighted keyword
+            # Optimized keyword matching with early breaks
+            field_score = 0
             for keyword, kw_weight in weighted_keywords.items():
                 keyword_norm = normalize_text(keyword)
                 
                 if keyword_norm in field_text:
                     match_quality = 1.0 if keyword_norm == field_text else 0.8
                     contribution = kw_weight * field_weight * match_quality
-                    score += contribution
-        
-        # Bonus for being in a top cluster
-        specialist_cluster = row.get('topic_cluster', -1)
-        cluster_ids = [c[0] for c in top_clusters]
-        if specialist_cluster in cluster_ids:
-            cluster_rank = cluster_ids.index(specialist_cluster)
-            score += (10 - cluster_rank) * 0.5
-        
-        # Include existing relevancy score
-        if 'relevancy_score' in row and pd.notna(row['relevancy_score']):
-            score += float(row['relevancy_score']) * 0.3
+                    field_score += contribution
+                    
+                    # Early termination if we have a very strong match in this field
+                    if field_score > 5.0:
+                        break
+            
+            score += field_score
         
         if score > 0:
             specialist_scores.append((idx, score))
+            
+            # Early termination: if we have enough high-quality results (more aggressive)
+            if len(specialist_scores) >= max_results * 2 and score < 1.5:
+                break
     
     # Sort by score and get top results
     specialist_scores.sort(key=lambda x: x[1], reverse=True)
@@ -291,46 +485,12 @@ def filter_specialists(query: str, location: str = None, max_results: int = 20) 
     search_time = (time.time() - start_time) * 1000
     print(f"Advanced search for '{query}' completed in {search_time:.1f}ms, found {len(results_df)} results")
     
-    # Format results
+    # Format results using helper function
     formatted_results = []
     for idx in top_specialist_indices:
         row = filtered_df.loc[idx]
         score = next(s for i, s in specialist_scores if i == idx)
-        
-        specialist = {
-            'id': str(idx),
-            'name': f"{row.get('first_name', '')} {row.get('last_name', '')}".strip(),
-            'first_name': row.get('first_name', ''),
-            'last_name': row.get('last_name', ''),
-            'hospital': row.get('hospital_affiliation', 'N/A'),
-            'specialty': row.get('rare_diseases_treated', 'N/A'),
-            'research_interests': row.get('research_interests', 'N/A'),
-            'location': {
-                'city': row.get('city', ''),
-                'state': row.get('state', ''),
-                'country': row.get('country', '')
-            },
-            'contact': {
-                'email': row.get('email', ''),
-                'phone': row.get('phone', '') or row.get('verified_phone', ''),
-                'website': row.get('website', '')
-            },
-            'scores': {
-                'total_score': round(score, 2),
-                'search_score': round(score, 2),
-                'relevancy_score': float(row.get('relevancy_score', 0)),
-                'topic_confidence': float(row.get('topic_confidence', 0))
-            },
-            'topic_cluster': int(row.get('topic_cluster', -1)),
-            'npi': row.get('npi', ''),
-            'verified_data': {
-                'city': row.get('verified_city', ''),
-                'state': row.get('verified_state', ''),
-                'phone': row.get('verified_phone', ''),
-                'specialty': row.get('verified_specialty', '')
-            }
-        }
-        formatted_results.append(specialist)
+        formatted_results.append(format_specialist_result(row, score))
     
     return formatted_results
 
