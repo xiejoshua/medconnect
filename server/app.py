@@ -22,10 +22,7 @@ def load_data():
     try:
         # Try to load parquet file from data folder
         parquet_files = [
-            'data/specialists_final_with_npi.parquet',
-            'data/specialists_with_topics_final.parquet', 
-            'data/npi_enhanced_specialists.parquet',
-            'data/main_dataset.parquet'  # From your drive download folder
+            'data/specialists_with_topics_final.parquet'
         ]
         
         for filename in parquet_files:
@@ -40,8 +37,7 @@ def load_data():
         
         # Load topic keywords from data folder
         topic_files = [
-            'data/topic_keywords.json',
-            'data/disease_tracking.json'  # Alternative location
+            'data/topic_keywords.json'
         ]
         for filename in topic_files:
             if os.path.exists(filename):
@@ -104,18 +100,32 @@ def normalize_text(text: str) -> str:
     # Convert to lowercase and strip
     text = text.lower().strip()
     
-    # Handle apostrophes in possessives and contractions
-    text = text.replace("'", "")  # Remove all apostrophes
+    # First, normalize specific medical terms with possessives before general processing
+    # This ensures proper handling of conditions like "parkinson's disease"
+    text = text.replace("parkinson's", "parkinson")
+    text = text.replace("parkinsons", "parkinson")
+    text = text.replace("alzheimer's", "alzheimer") 
+    text = text.replace("alzheimers", "alzheimer")
+    text = text.replace("huntington's", "huntington")
+    text = text.replace("huntingtons", "huntington")
+    text = text.replace("crohn's", "crohn")
+    text = text.replace("crohns", "crohn")
+    
+    # Handle general apostrophes in possessives and contractions
+    text = text.replace("'s", "s")  # general possessives -> plurals
+    text = text.replace("'", "")   # Remove remaining apostrophes
     
     # Remove other punctuation and normalize whitespace
     text = re.sub(r"[^\w\s]", " ", text)  # Keep only alphanumeric and whitespace
     text = re.sub(r"\s+", " ", text).strip()  # Normalize multiple spaces
     
-    # Handle common variations in medical terminology
-    text = text.replace("disease", "diseases")
-    text = text.replace("syndrome", "syndromes")
-    text = text.replace("condition", "conditions")
-    return text
+    # Handle common medical terminology variations
+    text = text.replace("disease", "").replace("diseases", "")
+    text = text.replace("syndrome", "").replace("syndromes", "")
+    text = text.replace("condition", "").replace("conditions", "")
+    text = text.replace("disorder", "").replace("disorders", "")
+    
+    return text.strip()
 
 def filter_specialists(query: str, location: str = None, max_results: int = 20) -> List[Dict]:
     """Filter specialists based on search criteria"""
@@ -127,20 +137,51 @@ def filter_specialists(query: str, location: str = None, max_results: int = 20) 
     # Normalize query for better matching
     query_normalized = normalize_text(query)
     query_words = query_normalized.split()
+    
+    print(f"Debug: Original query: '{query}' -> Normalized: '{query_normalized}' -> Words: {query_words}")
 
     # Find matching topics first
     matching_topics = []
+    topic_relevance_scores = {}
+    
     for topic_id, keywords in topic_keywords.items():
         if topic_id == '-1':  # Skip outlier topic
             continue
+        
+        topic_relevance = 0
         for keyword in keywords:
             keyword_normalized = normalize_text(keyword)
-            if query_normalized in keyword_normalized or keyword_normalized in query_normalized:
-                try:
-                    matching_topics.append(int(topic_id))
-                    break
-                except ValueError:
-                    continue
+            
+            # Multiple levels of matching for better coverage
+            if query_normalized == keyword_normalized:
+                topic_relevance += 10  # Exact match gets highest score
+            elif query_normalized in keyword_normalized or keyword_normalized in query_normalized:
+                topic_relevance += 8   # Substring match
+            else:
+                # Check if any query word matches any keyword word
+                query_words_set = set(query_normalized.split())
+                keyword_words_set = set(keyword_normalized.split())
+                overlap = len(query_words_set.intersection(keyword_words_set))
+                if overlap > 0:
+                    # Higher weight for more word overlap
+                    topic_relevance += overlap * 3
+                else:
+                    # Check for partial word matches (for medical terms like "parkinson" matching "parkinsonian")
+                    for qword in query_words_set:
+                        for kword in keyword_words_set:
+                            if len(qword) > 3 and len(kword) > 3:  # Only for longer words
+                                if qword in kword or kword in qword:
+                                    topic_relevance += 1
+        
+        if topic_relevance > 0:
+            try:
+                topic_int = int(topic_id)
+                matching_topics.append(topic_int)
+                topic_relevance_scores[topic_int] = topic_relevance
+            except ValueError:
+                continue
+    
+    print(f"Debug: Found {len(matching_topics)} matching topics with scores: {topic_relevance_scores}")
 
     # Filter by matching topics if found
     if matching_topics:
@@ -157,40 +198,44 @@ def filter_specialists(query: str, location: str = None, max_results: int = 20) 
         )
         filtered_df = filtered_df[location_mask]
 
-    # Text-based scoring with improved matching
-    scores = []
-    for _, row in filtered_df.iterrows():
-        score = 0
-        text_fields = [
-            str(row.get('rare_diseases_treated', '')),
-            str(row.get('research_interests', '')),
-            str(row.get('specialty', '')),
-            str(row.get('clinical_focus', ''))
-        ]
-
-        for field in text_fields:
-            field_normalized = normalize_text(field)
-            if query_normalized in field_normalized:
-                score += 2  # Exact substring match
-            # Check for partial word matches
-            for word in query_words:
-                if word in field_normalized:
-                    score += 1
-
-        scores.append(score)
-
-    filtered_df['search_score'] = scores
-
-    # Sort by score, then by relevancy score
-    results = filtered_df[filtered_df['search_score'] > 0].copy()
-    if len(results) == 0:
-        # No matches: return empty to avoid misleading results for non-medical queries
-        return []
+    # Sort by BERTopic relevancy scores (topic-based semantic matching)
+    results = filtered_df.copy()
+    
+    # Add custom relevancy scoring based on topic matching
+    if matching_topics and topic_relevance_scores:
+        # Create a relevancy score based on topic matching
+        def calculate_relevancy(row):
+            topic_cluster = row.get('topic_cluster', -1)
+            base_relevancy = float(row.get('relevancy_score', 0))
+            topic_conf = float(row.get('topic_confidence', 0))
+            
+            # If this specialist is in a matching topic, boost their score
+            if topic_cluster in topic_relevance_scores:
+                topic_boost = topic_relevance_scores[topic_cluster] / 10.0  # Normalize
+                return base_relevancy + topic_boost + topic_conf
+            else:
+                return base_relevancy + topic_conf
+        
+        results['combined_relevancy'] = results.apply(calculate_relevancy, axis=1)
+        sort_columns = ['combined_relevancy']
     else:
-        sort_columns = ['search_score']
+        # Fallback to existing scores
+        sort_columns = []
         if 'relevancy_score' in results.columns:
             sort_columns.append('relevancy_score')
-        results = results.nlargest(max_results, sort_columns)
+        if 'topic_confidence' in results.columns:
+            sort_columns.append('topic_confidence')
+    
+    # If we found matching topics, we have relevant results
+    if len(results) == 0:
+        # No matches in topic clusters
+        return []
+    else:
+        if sort_columns:
+            results = results.nlargest(max_results, sort_columns)
+        else:
+            # Fallback if no BERTopic scores available
+            results = results.head(max_results)
     
     search_time = (time.time() - start_time) * 1000
     print(f"Search for '{query}' completed in {search_time:.1f}ms, found {len(results)} results")
@@ -295,86 +340,6 @@ def search_specialists():
             'success': False,
             'error': str(e),
             'results': []
-        }), 500
-
-@app.route('/api/specialties', methods=['GET'])
-def get_specialties():
-    """Get list of all available specialties"""
-    try:
-        if specialists_df is None:
-            return jsonify({
-                'success': False,
-                'error': 'Specialist data not loaded',
-                'specialties': []
-            }), 500
-        
-        # Get unique rare diseases treated
-        all_diseases = []
-        for diseases in specialists_df['rare_diseases_treated'].dropna():
-            if pd.notna(diseases) and diseases:
-                # Split on common delimiters
-                disease_list = str(diseases).replace(';', ',').replace('|', ',').split(',')
-                for disease in disease_list:
-                    disease = disease.strip()
-                    if disease and disease not in all_diseases:
-                        all_diseases.append(disease)
-        
-        # Sort alphabetically
-        all_diseases.sort()
-        
-        return jsonify({
-            'success': True,
-            'total_specialties': len(all_diseases),
-            'specialties': all_diseases[:100]  # Limit to first 100 for performance
-        })
-        
-    except Exception as e:
-        print(f"Error in get_specialties: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'specialties': []
-        }), 500
-
-@app.route('/api/stats', methods=['GET'])
-def get_stats():
-    """Get dataset statistics"""
-    try:
-        if specialists_df is None:
-            return jsonify({
-                'success': False,
-                'error': 'Specialist data not loaded'
-            }), 500
-        
-        stats = {
-            'total_specialists': len(specialists_df),
-            'topic_clusters': int(specialists_df['topic_cluster'].nunique()),
-            'us_specialists': len(specialists_df[specialists_df['country'].str.upper() == 'UNITED STATES']) if 'country' in specialists_df.columns else 0,
-            'with_npi': int(specialists_df['npi'].notna().sum()) if 'npi' in specialists_df.columns else 0,
-            'with_contact_info': int((specialists_df['email'].notna() | specialists_df['phone'].notna()).sum()),
-            'top_topics': []
-        }
-        
-        # Get top 5 topic clusters
-        topic_counts = specialists_df['topic_cluster'].value_counts().head(5)
-        for topic, count in topic_counts.items():
-            topic_info = {
-                'topic_id': int(topic),
-                'specialist_count': int(count),
-                'keywords': topic_keywords.get(str(topic), [])[:5]  # First 5 keywords
-            }
-            stats['top_topics'].append(topic_info)
-        
-        return jsonify({
-            'success': True,
-            'stats': stats
-        })
-        
-    except Exception as e:
-        print(f"Error in get_stats: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
         }), 500
 
 # Legacy endpoint for backward compatibility
