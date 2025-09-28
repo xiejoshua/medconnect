@@ -90,9 +90,9 @@ export function SearchBar() {
         <span>•</span>
         <button 
           className="text-primary hover:underline"
-          onClick={() => handleQuickSearch("Muscular Dystrophy")}
+          onClick={() => handleQuickSearch("Huntington's")}
         >
-          Muscular Dystrophy
+          Huntington's
         </button>
       </div>
 
