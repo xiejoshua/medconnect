@@ -148,7 +148,7 @@ export default function SearchResultsPage() {
       setHasSearched(true);
       
       try {
-        const response = await fetch(`http://localhost:8000/api/specialists/search?q=${encodeURIComponent(searchQuery)}`);
+        const response = await fetch(`https://medconnect-backend-zeta.vercel.app/api/specialists/search?q=${encodeURIComponent(searchQuery)}`);
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
