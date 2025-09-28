@@ -510,13 +510,17 @@ def search_specialists():
                 'results': []
             }), 400
         
-        # Validate medical query
+        # Validate medical query - return empty results instead of error for better UX
         if not is_valid_medical_query(query):
             return jsonify({
-                'success': False,
-                'error': 'Please enter a valid medical condition or disease name',
+                'success': True,
+                'query': query,
+                'location': location or None,
+                'invalid_query': True,
+                'message': 'Please enter a valid medical condition or disease name. Try terms like "Parkinson", "diabetes", or "cancer".',
+                'total_results': 0,
                 'results': []
-            }), 400
+            })
         
         if specialists_df is None:
             return jsonify({
